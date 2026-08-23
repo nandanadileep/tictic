@@ -12,7 +12,7 @@ struct SarvamClient {
         mode: TranscriptionMode
     ) async throws -> SarvamTranscript {
         let audioData = try Data(contentsOf: audioURL)
-        let boundary = "Vaani-\(UUID().uuidString)"
+        let boundary = "TicTic-\(UUID().uuidString)"
         let body = Self.multipartBody(
             audioData: audioData,
             filename: audioURL.lastPathComponent,

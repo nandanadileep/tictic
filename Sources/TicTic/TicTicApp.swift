@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @main
-struct VaaniApp: App {
+struct TicTicApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var state: AppState
 
@@ -15,7 +15,7 @@ struct VaaniApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Vaani", id: "settings") {
+        Window("tictic", id: "settings") {
             SettingsView(state: state)
                 .frame(minWidth: 790, minHeight: 590)
                 .onAppear { state.refreshPermissions() }

@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 enum KeychainStore {
-    private static let service = "ai.vaani.macos"
+    private static let service = "com.nandanadileep.tictic"
     private static let account = "sarvam-api-key"
 
     static func saveAPIKey(_ key: String) throws {

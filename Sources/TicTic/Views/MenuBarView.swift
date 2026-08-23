@@ -16,7 +16,7 @@ struct MenuBarView: View {
             HStack(spacing: 11) {
                 BrandMark(size: 38)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Vaani").font(.system(size: 16, weight: .bold, design: .rounded))
+                    Text("tictic").font(.system(size: 16, weight: .bold, design: .rounded))
                     Text(state.statusMessage).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()

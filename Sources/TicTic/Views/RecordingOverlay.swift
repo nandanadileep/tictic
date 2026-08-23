@@ -77,7 +77,7 @@ struct RecordingOverlay: View {
         case .transcribing: "Turning voice into text"
         case .success: "Done"
         case .failure: "Something needs attention"
-        case .idle: "Vaani"
+        case .idle: "tictic"
         }
     }
 

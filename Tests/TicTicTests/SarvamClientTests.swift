@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Vaani
+@testable import TicTic
 
 @Test func multipartBodyContainsCurrentModelModeLanguageAndAudio() {
     let audio = Data([0x01, 0x02, 0x03, 0x04])

@@ -30,7 +30,7 @@ struct SettingsView: View {
                 HStack(spacing: 11) {
                     BrandMark(size: 40)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("Vaani").font(.system(size: 18, weight: .bold, design: .rounded))
+                        Text("tictic").font(.system(size: 18, weight: .bold, design: .rounded))
                         Text("Voice, naturally.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -192,7 +192,7 @@ private struct DictationSettingsView: View {
     }
 
     var body: some View {
-        Page(title: "Dictation", subtitle: "Tune Vaani to the way you speak and write.") {
+        Page(title: "Dictation", subtitle: "Tune tictic to the way you speak and write.") {
             Card {
                 VStack(alignment: .leading, spacing: 18) {
                     SettingRow(title: "Language", subtitle: "Auto-detect works well for everyday switching") {
@@ -229,7 +229,7 @@ private struct DictationSettingsView: View {
                     }
                     Divider()
                     Toggle("Insert into the active text field", isOn: $preferences.pasteAutomatically)
-                    Text(preferences.pasteAutomatically ? "Vaani returns focus to the app where you started and types at the cursor." : "Finished transcripts are copied to the clipboard.")
+                    Text(preferences.pasteAutomatically ? "tictic returns focus to the app where you started and types at the cursor." : "Finished transcripts are copied to the clipboard.")
                         .font(.caption).foregroundStyle(.secondary)
                     Divider()
                     Toggle("Keep local transcript history", isOn: $preferences.saveHistory)
@@ -254,7 +254,7 @@ private struct VocabularyView: View {
     }
 
     var body: some View {
-        Page(title: "Vocabulary", subtitle: "Teach Vaani your names, terminology, and reusable phrases.") {
+        Page(title: "Vocabulary", subtitle: "Teach tictic your names, terminology, and reusable phrases.") {
             Card {
                 VStack(alignment: .leading, spacing: 14) {
                     Picker("Type", selection: $kind) {
@@ -262,7 +262,7 @@ private struct VocabularyView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    TextField(kind == .replacement ? "What Vaani may hear (e.g. sarvam eye)" : "Trigger phrase (e.g. my meeting link)", text: $spoken)
+                    TextField(kind == .replacement ? "What tictic may hear (e.g. sarvam eye)" : "Trigger phrase (e.g. my meeting link)", text: $spoken)
                         .textFieldStyle(.roundedBorder)
                     TextField(kind == .replacement ? "Write it as (e.g. Sarvam AI)" : "Text to insert", text: $written, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
@@ -384,7 +384,7 @@ private struct PermissionsView: View {
     @ObservedObject var state: AppState
 
     var body: some View {
-        Page(title: "Permissions", subtitle: "Two permissions let Vaani listen and type anywhere.") {
+        Page(title: "Permissions", subtitle: "Two permissions let tictic listen and type anywhere.") {
             PermissionCard(
                 icon: "mic.fill", title: "Microphone",
                 detail: "Used only while the recorder is visible.",
@@ -397,7 +397,7 @@ private struct PermissionsView: View {
                 granted: state.accessibilityGranted,
                 action: state.requestAccessibilityPermission
             )
-            Text("If a permission remains off, open System Settings → Privacy & Security and enable Vaani, then return here.")
+            Text("If a permission remains off, open System Settings → Privacy & Security and enable tictic, then return here.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

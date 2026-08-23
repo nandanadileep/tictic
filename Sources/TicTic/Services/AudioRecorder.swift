@@ -55,7 +55,7 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
 
     private func beginSegment() throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("vaani-\(UUID().uuidString)-\(segmentIndex).m4a")
+            .appendingPathComponent("tictic-\(UUID().uuidString)-\(segmentIndex).m4a")
         segmentIndex += 1
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),

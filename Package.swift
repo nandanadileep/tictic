@@ -3,20 +3,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "Vaani",
+    name: "TicTic",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Vaani", targets: ["Vaani"])
+        .executable(name: "TicTic", targets: ["TicTic"])
     ],
     targets: [
         .executableTarget(
-            name: "Vaani",
-            path: "Sources/Vaani"
+            name: "TicTic",
+            path: "Sources/TicTic"
         ),
         .testTarget(
-            name: "VaaniTests",
-            dependencies: ["Vaani"],
-            path: "Tests/VaaniTests"
+            name: "TicTicTests",
+            dependencies: ["TicTic"],
+            path: "Tests/TicTicTests"
         )
     ],
     swiftLanguageVersions: [.v5]

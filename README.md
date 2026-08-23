@@ -1,6 +1,6 @@
-# Vaani
+# tictic
 
-Vaani is a native macOS voice-to-text app built for Indian languages and powered by Sarvam AI. Hold a global shortcut to dictate into any text field, or double-tap it for hands-free recording.
+tictic is a native macOS voice-to-text app built for Indian languages and powered by Sarvam AI. Hold a global shortcut to dictate into any text field, or double-tap it for hands-free recording.
 
 ## Highlights
 
@@ -27,7 +27,7 @@ Vaani is a native macOS voice-to-text app built for Indian languages and powered
 ```sh
 swift test
 ./scripts/build-app.sh
-open dist/Vaani.app
+open dist/TicTic.app
 ```
 
 On first launch, paste your Sarvam API key and grant Microphone and Accessibility permissions. Accessibility access is required to observe the global shortcut and insert text at the cursor.
@@ -36,11 +36,11 @@ The default shortcut is **Control + Shift + Space**. Hold it while speaking and 
 
 ## Architecture
 
-Vaani records AAC audio locally in 25-second segments, uploads each segment to Sarvam's `/speech-to-text` endpoint with `saaras:v3`, joins the ordered transcripts, applies your local vocabulary, optionally polishes the result using `/v1/chat/completions` with `sarvam-105b`, and inserts it into the app that was active when recording began. API keys live in Keychain, preferences and transcript history stay on-device, and temporary audio files are removed after each request.
+tictic records AAC audio locally in 25-second segments, uploads each segment to Sarvam's `/speech-to-text` endpoint with `saaras:v3`, joins the ordered transcripts, applies your local vocabulary, optionally polishes the result using `/v1/chat/completions` with `sarvam-105b`, and inserts it into the app that was active when recording began. API keys live in Keychain, preferences and transcript history stay on-device, and temporary audio files are removed after each request.
 
 ## Privacy
 
-Audio is sent directly from the Mac to Sarvam AI for transcription. Vaani does not run a proxy or analytics service. Transcript history can be disabled and cleared from Settings.
+Audio is sent directly from the Mac to Sarvam AI for transcription. tictic does not run a proxy or analytics service. Transcript history can be disabled and cleared from Settings.
 
 ## Project status
 

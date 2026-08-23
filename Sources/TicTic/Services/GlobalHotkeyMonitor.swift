@@ -7,7 +7,6 @@ final class GlobalHotkeyMonitor {
 
     private var eventTap: CFMachPort?
     private var source: CFRunLoopSource?
-    private let queue = DispatchQueue(label: "ai.vaani.hotkey", qos: .userInteractive)
     private var hotkey: HotkeyChoice
 
     init(hotkey: HotkeyChoice) {
