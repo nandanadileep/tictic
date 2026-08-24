@@ -12,6 +12,7 @@ final class Preferences: ObservableObject {
         static let smartFormatting = "smartFormatting"
         static let writingStyle = "writingStyle"
         static let outputPresetVersion = "outputPresetVersion"
+        static let shortcutPresetVersion = "shortcutPresetVersion"
     }
 
     private let defaults: UserDefaults
@@ -34,13 +35,12 @@ final class Preferences: ObservableObject {
         } else {
             mode = TranscriptionMode(rawValue: defaults.string(forKey: Key.mode) ?? "") ?? .translit
         }
-        let savedHotkey = HotkeyChoice(rawValue: defaults.string(forKey: Key.hotkey) ?? "")
         let resolvedHotkey: HotkeyChoice
-        switch savedHotkey {
-        case nil, .rightOption, .controlShiftSpace:
-            resolvedHotkey = .leftControlShift
-        default:
-            resolvedHotkey = savedHotkey!
+        if defaults.integer(forKey: Key.shortcutPresetVersion) < 1 {
+            resolvedHotkey = .optionZ
+            defaults.set(1, forKey: Key.shortcutPresetVersion)
+        } else {
+            resolvedHotkey = HotkeyChoice(rawValue: defaults.string(forKey: Key.hotkey) ?? "") ?? .optionZ
         }
         hotkey = resolvedHotkey
         defaults.set(resolvedHotkey.rawValue, forKey: Key.hotkey)

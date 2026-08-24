@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Foundation
 
 struct ModifierChordTracker {
@@ -28,6 +29,8 @@ final class GlobalHotkeyMonitor {
 
     private var eventTap: CFMachPort?
     private var source: CFRunLoopSource?
+    private var registeredHotKey: EventHotKeyRef?
+    private var hotKeyHandler: EventHandlerRef?
     private var hotkey: HotkeyChoice
     private var modifierTracker: ModifierChordTracker
 
@@ -43,6 +46,12 @@ final class GlobalHotkeyMonitor {
 
     func start() -> Bool {
         stop()
+        if !hotkey.isModifierOnly { return startRegisteredHotKey() }
+
+        return startModifierMonitor()
+    }
+
+    private func startModifierMonitor() -> Bool {
         let mask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
             | (1 << CGEventType.flagsChanged.rawValue)
@@ -68,12 +77,67 @@ final class GlobalHotkeyMonitor {
         return true
     }
 
+    private func startRegisteredHotKey() -> Bool {
+        let pointer = Unmanaged.passUnretained(self).toOpaque()
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
+        let handlerStatus = InstallEventHandler(
+            GetEventDispatcherTarget(),
+            { _, event, userData in
+                guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+                let monitor = Unmanaged<GlobalHotkeyMonitor>.fromOpaque(userData).takeUnretainedValue()
+                let kind = GetEventKind(event)
+                DispatchQueue.main.async { [weak monitor] in
+                    if kind == UInt32(kEventHotKeyPressed) { monitor?.onKeyDown?() }
+                    if kind == UInt32(kEventHotKeyReleased) { monitor?.onKeyUp?() }
+                }
+                return noErr
+            },
+            eventTypes.count,
+            &eventTypes,
+            pointer,
+            &hotKeyHandler
+        )
+        guard handlerStatus == noErr else { return false }
+
+        let identifier = EventHotKeyID(signature: 0x54695463, id: 1) // "TiTc"
+        let registrationStatus = RegisterEventHotKey(
+            UInt32(hotkey.keyCode),
+            carbonModifiers,
+            identifier,
+            GetEventDispatcherTarget(),
+            OptionBits(kEventHotKeyExclusive),
+            &registeredHotKey
+        )
+        guard registrationStatus == noErr else {
+            if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
+            hotKeyHandler = nil
+            return false
+        }
+        return true
+    }
+
     func stop() {
         if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
         if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: false) }
+        if let registeredHotKey { UnregisterEventHotKey(registeredHotKey) }
+        if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
         source = nil
         eventTap = nil
+        registeredHotKey = nil
+        hotKeyHandler = nil
         modifierTracker = ModifierChordTracker(requiredKeyCodes: hotkey.modifierKeyCodes)
+    }
+
+    private var carbonModifiers: UInt32 {
+        var modifiers: UInt32 = 0
+        if hotkey.eventFlags.contains(.maskCommand) { modifiers |= UInt32(cmdKey) }
+        if hotkey.eventFlags.contains(.maskControl) { modifiers |= UInt32(controlKey) }
+        if hotkey.eventFlags.contains(.maskAlternate) { modifiers |= UInt32(optionKey) }
+        if hotkey.eventFlags.contains(.maskShift) { modifiers |= UInt32(shiftKey) }
+        return modifiers
     }
 
     private func handle(type: CGEventType, event: CGEvent) {

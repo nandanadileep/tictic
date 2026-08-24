@@ -90,6 +90,7 @@ enum IndicLanguage: String, CaseIterable, Codable, Identifiable {
 }
 
 enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
+    case optionZ
     case leftControlShift
     case rightOption
     case controlShiftSpace
@@ -101,6 +102,7 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
+        case .optionZ: "⌥ Z"
         case .leftControlShift: "Left ⌃ + ⇧"
         case .rightOption: "Right ⌥"
         case .controlShiftSpace: "⌃ ⇧ Space"
@@ -112,6 +114,7 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var keyCode: CGKeyCode {
         switch self {
+        case .optionZ: 6
         case .leftControlShift: 59
         case .rightOption: 61
         case .controlShiftSpace, .optionShiftSpace: 49
@@ -122,6 +125,7 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var eventFlags: CGEventFlags {
         switch self {
+        case .optionZ: [.maskAlternate]
         case .leftControlShift: [.maskControl, .maskShift]
         case .rightOption: [.maskAlternate]
         case .controlShiftSpace: [.maskControl, .maskShift]
