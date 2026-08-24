@@ -235,18 +235,33 @@ final class AppState: ObservableObject {
                 let rawText = parts.joined(separator: " ")
                 guard !rawText.isEmpty else { throw AppError.emptyTranscript }
                 let processed = dictionary.process(rawText)
-                let text: String
+                let preparedText: String
                 if shouldPolish && !processed.expandedShortcut {
                     statusMessage = "Polishing for \(capturedDestination?.applicationName ?? "this app")…"
-                    text = (try? await client.polish(
+                    preparedText = (try? await client.polish(
                             processed.text,
                             apiKey: apiKey,
+                            mode: mode,
                             style: writingStyle,
                             applicationName: capturedDestination?.applicationName,
                             vocabulary: dictionary.promptSummary
                         )) ?? processed.text
                 } else {
-                    text = processed.text
+                    preparedText = processed.text
+                }
+
+                let text: String
+                if mode == .translit,
+                   !processed.expandedShortcut,
+                   SarvamClient.containsNativeIndicScript(preparedText) {
+                    statusMessage = "Converting to English letters…"
+                    text = try await client.romanize(
+                        preparedText,
+                        apiKey: apiKey,
+                        vocabulary: dictionary.promptSummary
+                    )
+                } else {
+                    text = preparedText
                 }
 
                 if shouldPaste {

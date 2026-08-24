@@ -359,7 +359,9 @@ private struct HistoryView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(record.text).textSelection(.enabled).lineLimit(5)
                                 HStack {
-                                    Text(record.createdAt, style: .relative)
+                                    Text(record.createdAt, format: .dateTime.hour().minute())
+                                    Text("·")
+                                    Text("\(formatDuration(record.duration)) recording")
                                     Text("·")
                                     Text(record.mode.title)
                                     if let language = record.languageCode { Text("· \(language)") }
@@ -377,6 +379,12 @@ private struct HistoryView: View {
                 }
             }
         }
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let seconds = max(0, Int(duration.rounded()))
+        if seconds < 60 { return "\(seconds) sec" }
+        return "\(seconds / 60) min \(seconds % 60) sec"
     }
 }
 
