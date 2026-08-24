@@ -15,7 +15,7 @@ enum TranscriptionMode: String, CaseIterable, Codable, Identifiable {
         case .transcribe: "Original script"
         case .translate: "Translate to English"
         case .codemix: "Code-mixed"
-        case .translit: "Roman script"
+        case .translit: "Hinglish / Roman"
         case .verbatim: "Verbatim"
         }
     }
@@ -25,7 +25,7 @@ enum TranscriptionMode: String, CaseIterable, Codable, Identifiable {
         case .transcribe: "Clean text in the language you speak"
         case .translate: "Indian-language speech, polished English text"
         case .codemix: "English words stay English; Indic words keep their script"
-        case .translit: "Write Indian languages using Latin characters"
+        case .translit: "Write Hindi and other Indian languages using English letters"
         case .verbatim: "Keep fillers and spoken-number phrasing"
         }
     }
@@ -90,6 +90,7 @@ enum IndicLanguage: String, CaseIterable, Codable, Identifiable {
 }
 
 enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
+    case leftControlShift
     case rightOption
     case controlShiftSpace
     case controlOptionD
@@ -100,6 +101,7 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
+        case .leftControlShift: "Left ⌃ + ⇧"
         case .rightOption: "Right ⌥"
         case .controlShiftSpace: "⌃ ⇧ Space"
         case .controlOptionD: "⌃ ⌥ D"
@@ -110,6 +112,7 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var keyCode: CGKeyCode {
         switch self {
+        case .leftControlShift: 59
         case .rightOption: 61
         case .controlShiftSpace, .optionShiftSpace: 49
         case .controlOptionD: 2
@@ -119,6 +122,7 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var eventFlags: CGEventFlags {
         switch self {
+        case .leftControlShift: [.maskControl, .maskShift]
         case .rightOption: [.maskAlternate]
         case .controlShiftSpace: [.maskControl, .maskShift]
         case .controlOptionD: [.maskControl, .maskAlternate]
@@ -127,7 +131,15 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    var isModifierOnly: Bool { self == .rightOption }
+    var isModifierOnly: Bool { self == .rightOption || self == .leftControlShift }
+
+    var modifierKeyCodes: Set<CGKeyCode> {
+        switch self {
+        case .leftControlShift: [59, 56]
+        case .rightOption: [61]
+        default: []
+        }
+    }
 }
 
 enum WritingStyle: String, CaseIterable, Codable, Identifiable {

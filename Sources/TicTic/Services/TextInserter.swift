@@ -6,15 +6,26 @@ struct TextDestination {
     let processIdentifier: pid_t
     let applicationName: String
     let bundleIdentifier: String?
+    let focusedElement: AXUIElement?
 }
 
 enum TextInserter {
     static func captureDestination() -> TextDestination? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        let application = AXUIElementCreateApplication(app.processIdentifier)
+        var focused: CFTypeRef?
+        let focusedElement: AXUIElement?
+        if AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+           let focused {
+            focusedElement = (focused as! AXUIElement)
+        } else {
+            focusedElement = nil
+        }
         return TextDestination(
             processIdentifier: app.processIdentifier,
             applicationName: app.localizedName ?? "Unknown app",
-            bundleIdentifier: app.bundleIdentifier
+            bundleIdentifier: app.bundleIdentifier,
+            focusedElement: focusedElement
         )
     }
 
@@ -24,16 +35,32 @@ enum TextInserter {
     }
 
     @MainActor
-    static func insert(_ text: String, destination: TextDestination?) -> Bool {
+    static func insert(_ text: String, destination: TextDestination?) async -> Bool {
         if let destination,
            let app = NSRunningApplication(processIdentifier: destination.processIdentifier),
            !app.isTerminated {
             app.activate()
+            for _ in 0..<8 {
+                if NSWorkspace.shared.frontmostApplication?.processIdentifier == destination.processIdentifier {
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
         }
 
-        if isAccessibilityTrusted(), setFocusedSelection(text, destination: destination) {
-            return true
+        if isAccessibilityTrusted() {
+            if let captured = destination?.focusedElement,
+               AXUIElementSetAttributeValue(captured, kAXSelectedTextAttribute as CFString, text as CFTypeRef) == .success {
+                return true
+            }
+            if setFocusedSelection(text, destination: destination) { return true }
         }
+
+        if let destination,
+           NSWorkspace.shared.frontmostApplication?.processIdentifier != destination.processIdentifier {
+            return false
+        }
+        try? await Task.sleep(nanoseconds: 80_000_000)
         return pasteWithClipboard(text)
     }
 
@@ -72,7 +99,7 @@ enum TextInserter {
         up.post(tap: .cghidEventTap)
 
         if let oldItems {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 pasteboard.clearContents()
                 let restored = oldItems.map { values -> NSPasteboardItem in
                     let item = NSPasteboardItem()

@@ -11,6 +11,7 @@ final class Preferences: ObservableObject {
         static let pasteAutomatically = "pasteAutomatically"
         static let smartFormatting = "smartFormatting"
         static let writingStyle = "writingStyle"
+        static let outputPresetVersion = "outputPresetVersion"
     }
 
     private let defaults: UserDefaults
@@ -26,9 +27,21 @@ final class Preferences: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         language = IndicLanguage(rawValue: defaults.string(forKey: Key.language) ?? "") ?? .unknown
-        mode = TranscriptionMode(rawValue: defaults.string(forKey: Key.mode) ?? "") ?? .transcribe
+        if defaults.integer(forKey: Key.outputPresetVersion) < 1 {
+            mode = .translit
+            defaults.set(TranscriptionMode.translit.rawValue, forKey: Key.mode)
+            defaults.set(1, forKey: Key.outputPresetVersion)
+        } else {
+            mode = TranscriptionMode(rawValue: defaults.string(forKey: Key.mode) ?? "") ?? .translit
+        }
         let savedHotkey = HotkeyChoice(rawValue: defaults.string(forKey: Key.hotkey) ?? "")
-        let resolvedHotkey: HotkeyChoice = savedHotkey == .controlShiftSpace || savedHotkey == nil ? .rightOption : savedHotkey!
+        let resolvedHotkey: HotkeyChoice
+        switch savedHotkey {
+        case nil, .rightOption, .controlShiftSpace:
+            resolvedHotkey = .leftControlShift
+        default:
+            resolvedHotkey = savedHotkey!
+        }
         hotkey = resolvedHotkey
         defaults.set(resolvedHotkey.rawValue, forKey: Key.hotkey)
         saveHistory = defaults.object(forKey: Key.saveHistory) as? Bool ?? true

@@ -156,6 +156,9 @@ final class AppState: ObservableObject {
             return
         }
 
+        // Capture the target before permission checks or overlays can change focus.
+        destination = TextInserter.captureDestination()
+
         Task {
             if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
                 microphoneGranted = await recorder.requestPermission()
@@ -169,7 +172,6 @@ final class AppState: ObservableObject {
                 return
             }
             do {
-                destination = TextInserter.captureDestination()
                 startedAt = Date()
                 elapsed = 0
                 self.locked = locked
@@ -249,7 +251,14 @@ final class AppState: ObservableObject {
 
                 if shouldPaste {
                     try? await Task.sleep(nanoseconds: 120_000_000)
-                    _ = TextInserter.insert(text, destination: capturedDestination)
+                    let inserted = await TextInserter.insert(text, destination: capturedDestination)
+                    if inserted {
+                        statusMessage = "Inserted into \(capturedDestination?.applicationName ?? "the active app")"
+                    } else {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(text, forType: .string)
+                        statusMessage = "Copied — press ⌘V to paste"
+                    }
                 } else {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
@@ -261,7 +270,7 @@ final class AppState: ObservableObject {
                     ))
                 }
                 phase = .success(text)
-                statusMessage = shouldPaste ? "Inserted" : "Copied"
+                if !shouldPaste { statusMessage = "Copied" }
                 resetAfterDelay(seconds: 1.4)
             } catch {
                 phase = .failure(error.localizedDescription)

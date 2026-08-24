@@ -17,7 +17,13 @@ import Testing
     #expect(rendered.contains("name=\"mode\"\r\n\r\ntranslit"))
     #expect(rendered.contains("name=\"language_code\"\r\n\r\nta-IN"))
     #expect(rendered.contains("filename=\"sample.m4a\""))
+    #expect(rendered.contains("Content-Type: audio/mp4"))
     #expect(rendered.hasSuffix("--TEST-BOUNDARY--\r\n"))
+}
+
+@Test func audioMimeTypeMatchesRecorderFallbackFormat() {
+    #expect(SarvamClient.mimeType(for: URL(fileURLWithPath: "/tmp/voice.m4a")) == "audio/mp4")
+    #expect(SarvamClient.mimeType(for: URL(fileURLWithPath: "/tmp/voice.wav")) == "audio/wav")
 }
 
 @Test func sarvamTranscriptDecoding() throws {
@@ -36,10 +42,42 @@ import Testing
     ])
 }
 
-@Test func defaultShortcutUsesOneEasyToReachModifier() {
-    let choice = HotkeyChoice.rightOption
-    #expect(choice.keyCode == 61)
+@Test func transliterationModeIsPresentedAsHinglish() {
+    #expect(TranscriptionMode.translit.title == "Hinglish / Roman")
+    #expect(TranscriptionMode.translit.subtitle.contains("English letters"))
+}
+
+@Test @MainActor func existingInstallMigratesToHinglishAndLeftControlShift() {
+    let suite = "TicTicTests-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(TranscriptionMode.transcribe.rawValue, forKey: "mode")
+    defaults.set(HotkeyChoice.rightOption.rawValue, forKey: "hotkey")
+
+    let preferences = Preferences(defaults: defaults)
+
+    #expect(preferences.mode == .translit)
+    #expect(preferences.hotkey == .leftControlShift)
+}
+
+@Test func defaultShortcutUsesLeftControlAndShiftWithoutSpace() {
+    let choice = HotkeyChoice.leftControlShift
+    #expect(choice.keyCode == 59)
     #expect(choice.isModifierOnly)
-    #expect(choice.eventFlags.contains(.maskAlternate))
+    #expect(choice.modifierKeyCodes == [59, 56])
+    #expect(choice.eventFlags.contains(.maskControl))
+    #expect(choice.eventFlags.contains(.maskShift))
     #expect(!choice.eventFlags.contains(.maskCommand))
+}
+
+@Test func modifierChordStartsAndStopsOnCleanTransitions() {
+    var tracker = ModifierChordTracker(requiredKeyCodes: [59, 56])
+
+    #expect(tracker.update(keyCode: 59, flags: [.maskControl]) == nil)
+    #expect(tracker.update(keyCode: 56, flags: [.maskControl, .maskShift]) == true)
+    #expect(tracker.update(keyCode: 56, flags: [.maskControl]) == false)
+    #expect(tracker.update(keyCode: 59, flags: []) == nil)
+    #expect(tracker.update(keyCode: 56, flags: [.maskShift]) == nil)
+    #expect(tracker.update(keyCode: 59, flags: [.maskControl, .maskShift]) == true)
+    #expect(tracker.update(keyCode: 59, flags: [.maskShift]) == false)
 }

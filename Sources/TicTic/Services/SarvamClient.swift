@@ -16,6 +16,7 @@ struct SarvamClient {
         let body = Self.multipartBody(
             audioData: audioData,
             filename: audioURL.lastPathComponent,
+            mimeType: Self.mimeType(for: audioURL),
             language: language.rawValue,
             mode: mode.rawValue,
             boundary: boundary
@@ -97,6 +98,7 @@ struct SarvamClient {
     static func multipartBody(
         audioData: Data,
         filename: String,
+        mimeType: String = "audio/mp4",
         language: String,
         mode: String,
         boundary: String
@@ -113,10 +115,18 @@ struct SarvamClient {
         field("language_code", language)
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
-        append("Content-Type: audio/mp4\r\n\r\n")
+        append("Content-Type: \(mimeType)\r\n\r\n")
         body.append(audioData)
         append("\r\n--\(boundary)--\r\n")
         return body
+    }
+
+    static func mimeType(for audioURL: URL) -> String {
+        switch audioURL.pathExtension.lowercased() {
+        case "wav": "audio/wav"
+        case "mp3": "audio/mpeg"
+        default: "audio/mp4"
+        }
     }
 
     private static func extractErrorMessage(from data: Data) -> String? {

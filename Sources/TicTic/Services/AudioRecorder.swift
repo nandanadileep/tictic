@@ -1,9 +1,40 @@
 import AVFoundation
 import Foundation
+import OSLog
 
 @MainActor
 final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
+    private struct RecordingProfile: Equatable {
+        let name: String
+        let fileExtension: String
+        let settings: [String: Any]
+
+        static func == (lhs: RecordingProfile, rhs: RecordingProfile) -> Bool {
+            lhs.name == rhs.name
+        }
+    }
+
+    private static let recordingProfiles: [RecordingProfile] = [
+        aacProfile(name: "AAC 48 kHz", sampleRate: 48_000),
+        aacProfile(name: "AAC 44.1 kHz", sampleRate: 44_100),
+        aacProfile(name: "AAC 16 kHz", sampleRate: 16_000),
+        RecordingProfile(
+            name: "PCM WAV 48 kHz",
+            fileExtension: "wav",
+            settings: [
+                AVFormatIDKey: Int(kAudioFormatLinearPCM),
+                AVSampleRateKey: 48_000,
+                AVNumberOfChannelsKey: 1,
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsFloatKey: false,
+                AVLinearPCMIsBigEndianKey: false
+            ]
+        )
+    ]
+
+    private static let logger = Logger(subsystem: "com.nandanadileep.tictic", category: "audio")
     private var recorder: AVAudioRecorder?
+    private var selectedProfile: RecordingProfile?
     private var meterTimer: Timer?
     private var segmentTimer: Timer?
     private(set) var segmentURLs: [URL] = []
@@ -20,6 +51,7 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
         cleanupFiles()
         segmentURLs = []
         segmentIndex = 0
+        selectedProfile = nil
         self.levelHandler = levelHandler
         try beginSegment()
         startMeters()
@@ -54,21 +86,35 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
     }
 
     private func beginSegment() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tictic-\(UUID().uuidString)-\(segmentIndex).m4a")
-        segmentIndex += 1
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 16_000,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderBitRateKey: 64_000,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-        let next = try AVAudioRecorder(url: url, settings: settings)
-        next.delegate = self
-        next.isMeteringEnabled = true
-        guard next.prepareToRecord(), next.record() else { throw RecorderError.couldNotStart }
-        recorder = next
+        let profiles = selectedProfile.map { [$0] } ?? Self.recordingProfiles
+        var failures: [String] = []
+
+        for profile in profiles {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("tictic-\(UUID().uuidString)-\(segmentIndex).\(profile.fileExtension)")
+            do {
+                let next = try AVAudioRecorder(url: url, settings: profile.settings)
+                next.delegate = self
+                next.isMeteringEnabled = true
+                guard next.prepareToRecord() else {
+                    throw RecorderError.profileFailed("\(profile.name) could not prepare")
+                }
+                guard next.record() else {
+                    throw RecorderError.profileFailed("\(profile.name) could not begin")
+                }
+                selectedProfile = profile
+                recorder = next
+                segmentIndex += 1
+                Self.logger.info("Microphone recording started with \(profile.name, privacy: .public)")
+                return
+            } catch {
+                failures.append("\(profile.name): \(error.localizedDescription)")
+                Self.logger.error("Recording profile failed: \(profile.name, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+
+        throw RecorderError.couldNotStart(failures)
     }
 
     private func rollSegment() {
@@ -117,6 +163,30 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
 }
 
 enum RecorderError: LocalizedError {
-    case couldNotStart
-    var errorDescription: String? { "The microphone recording could not start." }
+    case profileFailed(String)
+    case couldNotStart([String])
+
+    var errorDescription: String? {
+        switch self {
+        case let .profileFailed(message): message
+        case .couldNotStart:
+            "tictic could not start the microphone. Check that an input device is selected in System Settings → Sound."
+        }
+    }
+}
+
+private extension AudioRecorder {
+    private static func aacProfile(name: String, sampleRate: Double) -> RecordingProfile {
+        RecordingProfile(
+            name: name,
+            fileExtension: "m4a",
+            settings: [
+                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey: sampleRate,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderBitRateKey: 64_000,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            ]
+        )
+    }
 }
