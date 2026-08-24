@@ -25,7 +25,6 @@ tictic is a native macOS voice-to-text app built for Indian languages and powere
 ## Build and run
 
 ```sh
-swift test
 ./scripts/build-app.sh
 open dist/TicTic.app
 ```
