@@ -19,7 +19,9 @@ final class GlobalHotkeyMonitor {
 
     func start() -> Bool {
         stop()
-        let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+        let mask = (1 << CGEventType.keyDown.rawValue)
+            | (1 << CGEventType.keyUp.rawValue)
+            | (1 << CGEventType.flagsChanged.rawValue)
         let pointer = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -52,6 +54,16 @@ final class GlobalHotkeyMonitor {
     private func handle(type: CGEventType, event: CGEvent) {
         guard CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)) == hotkey.keyCode else { return }
         let relevant: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
+
+        if hotkey.isModifierOnly {
+            guard type == .flagsChanged else { return }
+            let isPressed = event.flags.contains(hotkey.eventFlags)
+            DispatchQueue.main.async { [weak self] in
+                if isPressed { self?.onKeyDown?() } else { self?.onKeyUp?() }
+            }
+            return
+        }
+
         guard event.flags.intersection(relevant) == hotkey.eventFlags else { return }
         guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return }
         DispatchQueue.main.async { [weak self] in

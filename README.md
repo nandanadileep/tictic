@@ -32,7 +32,7 @@ open dist/TicTic.app
 
 On first launch, paste your Sarvam API key and grant Microphone and Accessibility permissions. Accessibility access is required to observe the global shortcut and insert text at the cursor.
 
-The default shortcut is **Control + Shift + Space**. Hold it while speaking and release to transcribe, or double-tap it to lock recording; press it once more to finish.
+The default shortcut is **Right Option (⌥)**. Hold that single key while speaking and release to transcribe, or double-tap it to lock recording; press it once more to finish.
 
 ## Architecture
 

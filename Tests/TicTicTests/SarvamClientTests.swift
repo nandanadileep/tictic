@@ -36,10 +36,10 @@ import Testing
     ])
 }
 
-@Test func defaultShortcutIsNotACommonCommandShortcut() {
-    let choice = HotkeyChoice.controlShiftSpace
-    #expect(choice.keyCode == 49)
-    #expect(choice.eventFlags.contains(.maskControl))
-    #expect(choice.eventFlags.contains(.maskShift))
+@Test func defaultShortcutUsesOneEasyToReachModifier() {
+    let choice = HotkeyChoice.rightOption
+    #expect(choice.keyCode == 61)
+    #expect(choice.isModifierOnly)
+    #expect(choice.eventFlags.contains(.maskAlternate))
     #expect(!choice.eventFlags.contains(.maskCommand))
 }

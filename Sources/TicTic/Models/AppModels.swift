@@ -90,6 +90,7 @@ enum IndicLanguage: String, CaseIterable, Codable, Identifiable {
 }
 
 enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
+    case rightOption
     case controlShiftSpace
     case controlOptionD
     case commandShiftPeriod
@@ -99,6 +100,7 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
+        case .rightOption: "Right ⌥"
         case .controlShiftSpace: "⌃ ⇧ Space"
         case .controlOptionD: "⌃ ⌥ D"
         case .commandShiftPeriod: "⌘ ⇧ ."
@@ -108,6 +110,7 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var keyCode: CGKeyCode {
         switch self {
+        case .rightOption: 61
         case .controlShiftSpace, .optionShiftSpace: 49
         case .controlOptionD: 2
         case .commandShiftPeriod: 47
@@ -116,12 +119,15 @@ enum HotkeyChoice: String, CaseIterable, Codable, Identifiable {
 
     var eventFlags: CGEventFlags {
         switch self {
+        case .rightOption: [.maskAlternate]
         case .controlShiftSpace: [.maskControl, .maskShift]
         case .controlOptionD: [.maskControl, .maskAlternate]
         case .commandShiftPeriod: [.maskCommand, .maskShift]
         case .optionShiftSpace: [.maskAlternate, .maskShift]
         }
     }
+
+    var isModifierOnly: Bool { self == .rightOption }
 }
 
 enum WritingStyle: String, CaseIterable, Codable, Identifiable {

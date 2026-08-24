@@ -27,7 +27,10 @@ final class Preferences: ObservableObject {
         self.defaults = defaults
         language = IndicLanguage(rawValue: defaults.string(forKey: Key.language) ?? "") ?? .unknown
         mode = TranscriptionMode(rawValue: defaults.string(forKey: Key.mode) ?? "") ?? .transcribe
-        hotkey = HotkeyChoice(rawValue: defaults.string(forKey: Key.hotkey) ?? "") ?? .controlShiftSpace
+        let savedHotkey = HotkeyChoice(rawValue: defaults.string(forKey: Key.hotkey) ?? "")
+        let resolvedHotkey: HotkeyChoice = savedHotkey == .controlShiftSpace || savedHotkey == nil ? .rightOption : savedHotkey!
+        hotkey = resolvedHotkey
+        defaults.set(resolvedHotkey.rawValue, forKey: Key.hotkey)
         saveHistory = defaults.object(forKey: Key.saveHistory) as? Bool ?? true
         pasteAutomatically = defaults.object(forKey: Key.pasteAutomatically) as? Bool ?? true
         smartFormatting = defaults.object(forKey: Key.smartFormatting) as? Bool ?? true
