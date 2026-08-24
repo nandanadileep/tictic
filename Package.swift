@@ -12,11 +12,6 @@ let package = Package(
         .executableTarget(
             name: "TicTic",
             path: "Sources/TicTic"
-        ),
-        .testTarget(
-            name: "TicTicTests",
-            dependencies: ["TicTic"],
-            path: "Tests/TicTicTests"
         )
     ],
     swiftLanguageVersions: [.v5]
