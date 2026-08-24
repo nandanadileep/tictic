@@ -4,7 +4,6 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var state: AppState
     @ObservedObject private var preferences: Preferences
-    @Environment(\.openWindow) private var openWindow
 
     init(state: AppState) {
         self.state = state
@@ -58,8 +57,7 @@ struct MenuBarView: View {
 
             HStack {
                 Button("Settings…") {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openWindow(id: "settings")
+                    AppDelegate.shared?.showSettingsWindow()
                 }
                 .buttonStyle(.plain)
                 Spacer()
