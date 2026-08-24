@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import OSLog
 
 struct TextDestination {
     let processIdentifier: pid_t
@@ -10,6 +11,8 @@ struct TextDestination {
 }
 
 enum TextInserter {
+    private static let logger = Logger(subsystem: "com.nandanadileep.tictic", category: "insertion")
+
     static func captureDestination() -> TextDestination? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
         let application = AXUIElementCreateApplication(app.processIdentifier)
@@ -36,46 +39,50 @@ enum TextInserter {
 
     @MainActor
     static func insert(_ text: String, destination: TextDestination?) async -> Bool {
-        if let destination,
-           let app = NSRunningApplication(processIdentifier: destination.processIdentifier),
-           !app.isTerminated {
+        guard isAccessibilityTrusted() else {
+            Self.logger.error("Paste blocked because Accessibility is not authorized")
+            return false
+        }
+
+        if let destination {
+            guard let app = NSRunningApplication(processIdentifier: destination.processIdentifier),
+                  !app.isTerminated else {
+                Self.logger.error("Destination application is no longer running")
+                return false
+            }
             app.activate()
-            for _ in 0..<8 {
+            for _ in 0..<16 {
                 if NSWorkspace.shared.frontmostApplication?.processIdentifier == destination.processIdentifier {
                     break
                 }
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }
-        }
-
-        if isAccessibilityTrusted() {
-            if let captured = destination?.focusedElement,
-               AXUIElementSetAttributeValue(captured, kAXSelectedTextAttribute as CFString, text as CFTypeRef) == .success {
-                return true
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == destination.processIdentifier else {
+                Self.logger.error("Could not activate destination \(destination.applicationName, privacy: .public)")
+                return false
             }
-            if setFocusedSelection(text, destination: destination) { return true }
+
+            // Restore the exact control that was focused when dictation began, then
+            // use a real paste. Content-editable and Electron fields often report a
+            // successful AXSelectedText write without changing their visible text.
+            if let focusedElement = destination.focusedElement {
+                _ = AXUIElementSetAttributeValue(
+                    focusedElement,
+                    kAXFocusedAttribute as CFString,
+                    kCFBooleanTrue
+                )
+            }
+            try? await Task.sleep(nanoseconds: 120_000_000)
         }
 
-        if let destination,
-           NSWorkspace.shared.frontmostApplication?.processIdentifier != destination.processIdentifier {
+        guard pasteWithClipboard(text) else {
+            Self.logger.error("Could not synthesize Command-V")
             return false
         }
-        try? await Task.sleep(nanoseconds: 80_000_000)
-        return pasteWithClipboard(text)
-    }
-
-    private static func setFocusedSelection(_ text: String, destination: TextDestination?) -> Bool {
-        let application: AXUIElement
         if let destination {
-            application = AXUIElementCreateApplication(destination.processIdentifier)
-        } else {
-            application = AXUIElementCreateSystemWide()
+            Self.logger.info("Dispatched paste to \(destination.applicationName, privacy: .public)")
         }
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
-              let focused else { return false }
-        let element = focused as! AXUIElement
-        return AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFTypeRef) == .success
+        return true
     }
 
     private static func pasteWithClipboard(_ text: String) -> Bool {
@@ -99,7 +106,7 @@ enum TextInserter {
         up.post(tap: .cghidEventTap)
 
         if let oldItems {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 pasteboard.clearContents()
                 let restored = oldItems.map { values -> NSPasteboardItem in
                     let item = NSPasteboardItem()

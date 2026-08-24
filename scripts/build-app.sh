@@ -16,7 +16,9 @@ cp "$PROJECT_DIR/.build/release/TicTic" "$MACOS_DIR/TicTic"
 cp "$PROJECT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 
 if command -v codesign >/dev/null 2>&1; then
-    codesign --force --deep --sign - "$APP_DIR"
+    codesign --force --deep --sign - \
+        --requirements '=designated => identifier "com.nandanadileep.tictic"' \
+        "$APP_DIR"
 fi
 
 echo "$APP_DIR"
