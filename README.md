@@ -1,4 +1,4 @@
-# TicTic — macOS Voice Typing for Indian Languages
+# TicTic: macOS Voice Typing for Indian Languages
 
 TicTic is an open-source, native macOS voice typing and speech-to-text app for Indian languages. Built with SwiftUI and powered by Sarvam AI, it turns speech into text in any Mac app using a global dictation shortcut.
 
