@@ -64,6 +64,7 @@ struct SettingsView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .sidebarToggle)
     }
 }
 
@@ -153,8 +154,6 @@ private struct HomeSettingsView: View {
                             Button("Replace") { state.removeAccessCode() }
                         }
                     } else {
-                        Text("Enter the private beta code Nandana shared with you. Every code includes five total minutes of dictation.")
-                            .font(.subheadline).foregroundStyle(.secondary)
                         HStack {
                             TextField("TIC-XXXX-XXXX-XXXX", text: $state.accessCodeDraft)
                                 .textFieldStyle(.roundedBorder)
