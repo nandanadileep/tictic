@@ -20,7 +20,7 @@ struct MenuBarView: View {
                 }
                 Spacer()
                 Circle()
-                    .fill(state.hasAPIKey ? .green : .orange)
+                    .fill(state.hasAccessCode ? .green : .orange)
                     .frame(width: 7, height: 7)
             }
             .padding(14)
@@ -46,7 +46,7 @@ struct MenuBarView: View {
                 HStack {
                     Label(preferences.language.title, systemImage: "character.bubble")
                     Spacer()
-                    Text(preferences.mode.title).foregroundStyle(.secondary)
+                    Text(state.remainingLabel).foregroundStyle(.secondary)
                 }
                 .font(.caption)
                 .padding(.horizontal, 4)

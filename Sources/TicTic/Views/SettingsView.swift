@@ -43,8 +43,8 @@ struct SettingsView: View {
                 .listStyle(.sidebar)
 
                 HStack(spacing: 7) {
-                    Circle().fill(state.hasAPIKey ? .green : .orange).frame(width: 7, height: 7)
-                    Text(state.hasAPIKey ? "Sarvam connected" : "Setup incomplete")
+                    Circle().fill(state.hasAccessCode ? .green : .orange).frame(width: 7, height: 7)
+                    Text(state.hasAccessCode ? state.remainingLabel : "Setup incomplete")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(16)
@@ -135,28 +135,32 @@ private struct HomeSettingsView: View {
             HStack(spacing: 14) {
                 MetricCard(icon: "character.bubble.fill", value: preferences.language.title, label: "Input language")
                 MetricCard(icon: "textformat.abc", value: preferences.mode.title, label: "Output style")
-                MetricCard(icon: "clock.fill", value: "\(state.history.records.count)", label: "Saved dictations")
+                MetricCard(icon: "hourglass", value: state.remainingLabel, label: "Beta allowance")
             }
 
             Card {
                 VStack(alignment: .leading, spacing: 14) {
-                    Label("Sarvam AI", systemImage: "key.fill").font(.headline)
-                    if state.hasAPIKey {
+                    Label("Beta access", systemImage: "ticket.fill").font(.headline)
+                    if state.hasAccessCode {
                         HStack {
                             Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-                            Text("API key stored securely in Keychain")
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Access code connected")
+                                Text("\(state.remainingLabel) of your 5-minute beta")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             Spacer()
-                            Button("Replace") { state.removeAPIKey() }
+                            Button("Replace") { state.removeAccessCode() }
                         }
                     } else {
-                        Text("Paste your Sarvam subscription key. It never leaves Keychain except in requests sent directly to Sarvam.")
+                        Text("Enter the private beta code Nandana shared with you. Every code includes five total minutes of dictation.")
                             .font(.subheadline).foregroundStyle(.secondary)
                         HStack {
-                            SecureField("Sarvam API key", text: $state.apiKeyDraft)
+                            TextField("TIC-XXXX-XXXX-XXXX", text: $state.accessCodeDraft)
                                 .textFieldStyle(.roundedBorder)
-                            Button("Save key") { state.saveAPIKey() }
+                            Button(state.isCheckingAccessCode ? "Checking…" : "Connect") { state.saveAccessCode() }
                                 .buttonStyle(.borderedProminent)
-                                .disabled(state.apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                .disabled(state.accessCodeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || state.isCheckingAccessCode)
                         }
                     }
                 }

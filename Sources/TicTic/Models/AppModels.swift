@@ -193,12 +193,30 @@ struct SarvamTranscript: Decodable, Equatable {
     let transcript: String
     let languageCode: String?
     let languageProbability: Double?
+    let formatToken: String?
+    let remainingSeconds: Double?
+    let limitSeconds: Double?
 
     enum CodingKeys: String, CodingKey {
         case requestID = "request_id"
         case transcript
         case languageCode = "language_code"
         case languageProbability = "language_probability"
+        case formatToken = "format_token"
+        case remainingSeconds = "remaining_seconds"
+        case limitSeconds = "limit_seconds"
+    }
+}
+
+struct BetaUsage: Decodable, Equatable {
+    let usedSeconds: Double
+    let remainingSeconds: Double
+    let limitSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case usedSeconds = "used_seconds"
+        case remainingSeconds = "remaining_seconds"
+        case limitSeconds = "limit_seconds"
     }
 }
 

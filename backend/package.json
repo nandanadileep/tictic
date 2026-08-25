@@ -1,0 +1,13 @@
+{
+  "name": "tictic-beta-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check api/health.js && node --check api/usage.js && node --check api/transcribe.js && node --check api/polish.js && node --check api/admin/invites.js"
+  }
+}

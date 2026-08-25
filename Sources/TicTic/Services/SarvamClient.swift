@@ -2,164 +2,81 @@ import Foundation
 
 struct SarvamClient {
     var session: URLSession = .shared
-    var endpoint = URL(string: "https://api.sarvam.ai/speech-to-text")!
-    var chatEndpoint = URL(string: "https://api.sarvam.ai/v1/chat/completions")!
+    var baseURL = URL(string: "https://tictic-api.vercel.app/api/")!
+
+    func usage(accessCode: String) async throws -> BetaUsage {
+        let data = try await post(path: "usage", payload: UsageRequest(inviteCode: accessCode))
+        return try decode(BetaUsage.self, from: data)
+    }
 
     func transcribe(
         audioURL: URL,
-        apiKey: String,
+        accessCode: String,
         language: IndicLanguage,
-        mode: TranscriptionMode
+        mode: TranscriptionMode,
+        durationSeconds: TimeInterval
     ) async throws -> SarvamTranscript {
         let audioData = try Data(contentsOf: audioURL)
-        let boundary = "TicTic-\(UUID().uuidString)"
-        let body = Self.multipartBody(
-            audioData: audioData,
+        let payload = TranscriptionRequest(
+            inviteCode: accessCode,
+            audioBase64: audioData.base64EncodedString(),
             filename: audioURL.lastPathComponent,
             mimeType: Self.mimeType(for: audioURL),
-            language: language.rawValue,
+            languageCode: language.rawValue,
             mode: mode.rawValue,
-            boundary: boundary
+            durationSeconds: durationSeconds
         )
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 60
-        request.setValue(apiKey, forHTTPHeaderField: "api-subscription-key")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw SarvamError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            let serverMessage = Self.extractErrorMessage(from: data)
-            throw SarvamError.http(status: http.statusCode, message: serverMessage)
-        }
-        do {
-            return try JSONDecoder().decode(SarvamTranscript.self, from: data)
-        } catch {
-            throw SarvamError.decoding(error.localizedDescription)
-        }
+        let data = try await post(path: "transcribe", payload: payload, timeout: 75)
+        return try decode(SarvamTranscript.self, from: data)
     }
 
     func polish(
         _ text: String,
-        apiKey: String,
+        accessCode: String,
+        formatToken: String,
         mode: TranscriptionMode,
         style: WritingStyle,
         applicationName: String?,
         vocabulary: String
     ) async throws -> String {
-        let context = applicationName ?? "a general writing app"
-        let styleInstruction: String
-        switch style {
-        case .automatic: styleInstruction = "Infer an appropriate tone and formatting for \(context)."
-        case .clean: styleInstruction = "Use clean, natural phrasing with correct punctuation."
-        case .concise: styleInstruction = "Be concise and remove repetition without losing information."
-        case .professional: styleInstruction = "Use a polished, professional tone."
-        case .casual: styleInstruction = "Use a relaxed, friendly, natural tone."
-        }
-        let outputInstruction: String
-        switch mode {
-        case .translit:
-            outputInstruction = "Write all Indian-language words using Latin (English/Roman) letters only. Transliterate; do not translate them. Never output native-script characters."
-        case .translate:
-            outputInstruction = "Return the complete result in English."
-        case .transcribe:
-            outputInstruction = "Preserve the transcript's language and native script."
-        case .codemix:
-            outputInstruction = "Keep English words in Latin letters and preserve Indic words in their native script."
-        case .verbatim:
-            outputInstruction = "Preserve the transcript's language, script, fillers, and spoken-number phrasing."
-        }
-        let vocabularyInstruction = vocabulary.isEmpty ? "" : " Preserve these preferred terms exactly: \(vocabulary)."
-        let system = """
-        You format voice dictation. Return only the final text, with no explanation or quotation marks. \
-        Preserve every fact, name, number, intent, and language. Never answer the content. \
-        Output requirement: \(outputInstruction) \
-        Apply spoken formatting instructions such as new paragraph, bullet list, comma, or question mark. \
-        Fix obvious speech-recognition punctuation and remove accidental filler words. \(styleInstruction)\(vocabularyInstruction)
-        """
-        let payload = ChatRequest(
-            model: "sarvam-105b",
-            messages: [
-                .init(role: "system", content: system),
-                .init(role: "user", content: text)
-            ],
-            temperature: 0.1,
-            maxTokens: max(256, min(2_048, text.count * 2))
+        try await format(
+            text,
+            accessCode: accessCode,
+            formatToken: formatToken,
+            mode: mode,
+            style: style,
+            applicationName: applicationName,
+            vocabulary: vocabulary,
+            operation: "polish"
         )
-        var request = URLRequest(url: chatEndpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 60
-        request.setValue(apiKey, forHTTPHeaderField: "api-subscription-key")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(payload)
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw SarvamError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw SarvamError.http(status: http.statusCode, message: Self.extractErrorMessage(from: data))
-        }
-        do {
-            let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
-            guard let content = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !content.isEmpty else { return text }
-            return content
-        } catch {
-            throw SarvamError.decoding(error.localizedDescription)
-        }
     }
 
-    func romanize(_ text: String, apiKey: String, vocabulary: String) async throws -> String {
-        let vocabularyInstruction = vocabulary.isEmpty ? "" : " Preserve these preferred terms exactly: \(vocabulary)."
-        let system = """
-        Transliterate the supplied text into Latin (English/Roman) letters. Preserve the original language, \
-        meaning, names, numbers, punctuation, and any words already written in English. Do not translate. \
-        Never output Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, \
-        Arabic-derived, Ol Chiki, Meetei Mayek, or other native-script characters. Return only the final text.\(vocabularyInstruction)
-        """
-        let payload = ChatRequest(
-            model: "sarvam-105b",
-            messages: [
-                .init(role: "system", content: system),
-                .init(role: "user", content: text)
-            ],
-            temperature: 0,
-            maxTokens: max(256, min(2_048, text.count * 2))
+    func romanize(
+        _ text: String,
+        accessCode: String,
+        formatToken: String,
+        vocabulary: String
+    ) async throws -> String {
+        try await format(
+            text,
+            accessCode: accessCode,
+            formatToken: formatToken,
+            mode: .translit,
+            style: .clean,
+            applicationName: nil,
+            vocabulary: vocabulary,
+            operation: "romanize"
         )
-        var request = URLRequest(url: chatEndpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 60
-        request.setValue(apiKey, forHTTPHeaderField: "api-subscription-key")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(payload)
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw SarvamError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw SarvamError.http(status: http.statusCode, message: Self.extractErrorMessage(from: data))
-        }
-        do {
-            let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
-            guard let content = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !content.isEmpty else { return text }
-            guard !Self.containsNativeIndicScript(content) else { throw SarvamError.romanizationFailed }
-            return content
-        } catch let error as SarvamError {
-            throw error
-        } catch {
-            throw SarvamError.decoding(error.localizedDescription)
-        }
     }
 
     static func containsNativeIndicScript(_ text: String) -> Bool {
         for scalar in text.unicodeScalars {
             switch scalar.value {
-            case 0x0600...0x077F, // Arabic-derived scripts used by Urdu, Kashmiri, and Sindhi
-                 0x0900...0x0D7F, // Devanagari through Malayalam
-                 0x1C50...0x1C7F, // Ol Chiki
-                 0xA8E0...0xA8FF, // Devanagari Extended
-                 0xABC0...0xABFF: // Meetei Mayek
+            case 0x0600...0x077F,
+                 0x0900...0x0D7F,
+                 0x1C50...0x1C7F,
+                 0xA8E0...0xA8FF,
+                 0xABC0...0xABFF:
                 return true
             default:
                 continue
@@ -168,30 +85,51 @@ struct SarvamClient {
         return false
     }
 
-    static func multipartBody(
-        audioData: Data,
-        filename: String,
-        mimeType: String = "audio/mp4",
-        language: String,
-        mode: String,
-        boundary: String
-    ) -> Data {
-        var body = Data()
-        func append(_ string: String) { body.append(Data(string.utf8)) }
-        func field(_ name: String, _ value: String) {
-            append("--\(boundary)\r\n")
-            append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
-            append("\(value)\r\n")
+    private func format(
+        _ text: String,
+        accessCode: String,
+        formatToken: String,
+        mode: TranscriptionMode,
+        style: WritingStyle,
+        applicationName: String?,
+        vocabulary: String,
+        operation: String
+    ) async throws -> String {
+        let payload = FormatRequest(
+            inviteCode: accessCode,
+            formatToken: formatToken,
+            text: text,
+            mode: mode.rawValue,
+            style: style.rawValue,
+            applicationName: applicationName,
+            vocabulary: vocabulary,
+            operation: operation
+        )
+        let data = try await post(path: "polish", payload: payload, timeout: 75)
+        return try decode(FormatResponse.self, from: data).text
+    }
+
+    private func post<T: Encodable>(path: String, payload: T, timeout: TimeInterval = 30) async throws -> Data {
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        request.httpMethod = "POST"
+        request.timeoutInterval = timeout
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw SarvamError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw SarvamError.http(status: http.statusCode, message: Self.extractErrorMessage(from: data))
         }
-        field("model", "saaras:v3")
-        field("mode", mode)
-        field("language_code", language)
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
-        append("Content-Type: \(mimeType)\r\n\r\n")
-        body.append(audioData)
-        append("\r\n--\(boundary)--\r\n")
-        return body
+        return data
+    }
+
+    private func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw SarvamError.decoding(error.localizedDescription)
+        }
     }
 
     static func mimeType(for audioURL: URL) -> String {
@@ -204,52 +142,72 @@ struct SarvamClient {
 
     private static func extractErrorMessage(from data: Data) -> String? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return object["detail"] as? String ?? object["message"] as? String ?? object["error"] as? String
+        return object["message"] as? String ?? object["detail"] as? String ?? object["error"] as? String
     }
 }
 
-private struct ChatRequest: Encodable {
-    struct Message: Encodable {
-        let role: String
-        let content: String
-    }
-    let model: String
-    let messages: [Message]
-    let temperature: Double
-    let maxTokens: Int
+private struct UsageRequest: Encodable {
+    let inviteCode: String
+    enum CodingKeys: String, CodingKey { case inviteCode = "invite_code" }
+}
+
+private struct TranscriptionRequest: Encodable {
+    let inviteCode: String
+    let audioBase64: String
+    let filename: String
+    let mimeType: String
+    let languageCode: String
+    let mode: String
+    let durationSeconds: Double
 
     enum CodingKeys: String, CodingKey {
-        case model, messages, temperature
-        case maxTokens = "max_tokens"
+        case inviteCode = "invite_code"
+        case audioBase64 = "audio_base64"
+        case filename
+        case mimeType = "mime_type"
+        case languageCode = "language_code"
+        case mode
+        case durationSeconds = "duration_seconds"
     }
 }
 
-private struct ChatResponse: Decodable {
-    struct Choice: Decodable {
-        struct Message: Decodable { let content: String }
-        let message: Message
+private struct FormatRequest: Encodable {
+    let inviteCode: String
+    let formatToken: String
+    let text: String
+    let mode: String
+    let style: String
+    let applicationName: String?
+    let vocabulary: String
+    let operation: String
+
+    enum CodingKeys: String, CodingKey {
+        case inviteCode = "invite_code"
+        case formatToken = "format_token"
+        case text, mode, style, vocabulary, operation
+        case applicationName = "application_name"
     }
-    let choices: [Choice]
 }
+
+private struct FormatResponse: Decodable { let text: String }
 
 enum SarvamError: LocalizedError {
     case invalidResponse
     case http(status: Int, message: String?)
     case decoding(String)
-    case romanizationFailed
 
     var errorDescription: String? {
         switch self {
-        case .invalidResponse: "Sarvam returned an invalid response."
+        case .invalidResponse: "TicTic returned an invalid response."
         case let .http(status, message):
             switch status {
-            case 403: "Sarvam rejected the API key. Check it in Settings."
-            case 413, 422: message ?? "The audio could not be processed. Try a shorter recording."
-            case 429: "Sarvam's rate limit was reached. Please try again shortly."
-            default: message ?? "Sarvam request failed (HTTP \(status))."
+            case 401: message ?? "This beta access code is not valid."
+            case 402: message ?? "Your five-minute beta allowance has been used."
+            case 413: message ?? "The audio segment is too large."
+            case 429: message ?? "TicTic is busy. Please try again shortly."
+            default: message ?? "TicTic request failed (HTTP \(status))."
             }
-        case let .decoding(message): "Could not read Sarvam's response: \(message)"
-        case .romanizationFailed: "The text could not be converted fully to English letters. Please try again."
+        case let .decoding(message): "Could not read TicTic's response: \(message)"
         }
     }
 }

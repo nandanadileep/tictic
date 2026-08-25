@@ -9,8 +9,10 @@ final class AppState: ObservableObject {
     @Published var audioLevel: Double = 0
     @Published var elapsed: TimeInterval = 0
     @Published var statusMessage = "Ready"
-    @Published var apiKeyDraft = ""
-    @Published private(set) var hasAPIKey = false
+    @Published var accessCodeDraft = ""
+    @Published private(set) var hasAccessCode = false
+    @Published private(set) var remainingSeconds: Double?
+    @Published private(set) var isCheckingAccessCode = false
     @Published private(set) var microphoneGranted = false
     @Published private(set) var accessibilityGranted = false
 
@@ -36,7 +38,7 @@ final class AppState: ObservableObject {
         self.history = history ?? HistoryStore()
         self.dictionary = dictionary ?? PersonalDictionary()
         hotkeyMonitor = GlobalHotkeyMonitor(hotkey: resolvedPreferences.hotkey)
-        hasAPIKey = !(KeychainStore.loadAPIKey() ?? "").isEmpty
+        hasAccessCode = !(KeychainStore.loadAccessCode() ?? "").isEmpty
 
         resolvedPreferences.$hotkey
             .dropFirst()
@@ -55,6 +57,7 @@ final class AppState: ObservableObject {
         if !hotkeyMonitor.start() {
             statusMessage = "Accessibility permission needed"
         }
+        if hasAccessCode { refreshUsage() }
     }
 
     func refreshPermissions() {
@@ -77,21 +80,39 @@ final class AppState: ObservableObject {
         }
     }
 
-    func saveAPIKey() {
-        do {
-            try KeychainStore.saveAPIKey(apiKeyDraft)
-            apiKeyDraft = ""
-            hasAPIKey = true
-            statusMessage = "API key saved securely"
-        } catch {
-            statusMessage = error.localizedDescription
+    func saveAccessCode() {
+        let candidate = accessCodeDraft.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !candidate.isEmpty else { return }
+        isCheckingAccessCode = true
+        statusMessage = "Checking beta access code…"
+        Task {
+            defer { isCheckingAccessCode = false }
+            do {
+                let usage = try await client.usage(accessCode: candidate)
+                try KeychainStore.saveAccessCode(candidate)
+                accessCodeDraft = ""
+                hasAccessCode = true
+                remainingSeconds = usage.remainingSeconds
+                statusMessage = usage.remainingSeconds > 0 ? "Beta access ready" : "Beta allowance used"
+            } catch {
+                hasAccessCode = false
+                remainingSeconds = nil
+                statusMessage = error.localizedDescription
+            }
         }
     }
 
-    func removeAPIKey() {
-        KeychainStore.removeAPIKey()
-        hasAPIKey = false
-        statusMessage = "API key removed"
+    func removeAccessCode() {
+        KeychainStore.removeAccessCode()
+        hasAccessCode = false
+        remainingSeconds = nil
+        statusMessage = "Beta access code removed"
+    }
+
+    var remainingLabel: String {
+        guard let remainingSeconds else { return hasAccessCode ? "Checking…" : "5 min beta" }
+        let seconds = max(0, Int(remainingSeconds.rounded(.down)))
+        return "\(seconds / 60):\(String(format: "%02d", seconds % 60)) left"
     }
 
     func toggleRecording() {
@@ -149,10 +170,16 @@ final class AppState: ObservableObject {
 
     private func beginRecording(locked: Bool) {
         guard !phase.isRecording else { return }
-        guard hasAPIKey else {
-            statusMessage = "Add your Sarvam API key in Settings"
+        guard hasAccessCode else {
+            statusMessage = "Add your beta access code in Settings"
             phase = .failure(statusMessage)
             resetAfterDelay()
+            return
+        }
+        if let remainingSeconds, remainingSeconds < 0.5 {
+            statusMessage = "Your five-minute beta allowance has been used"
+            phase = .failure(statusMessage)
+            resetAfterDelay(seconds: 3)
             return
         }
 
@@ -216,36 +243,47 @@ final class AppState: ObservableObject {
         Task {
             defer { recorder.cleanupFiles() }
             do {
-                guard let apiKey = KeychainStore.loadAPIKey(), !apiKey.isEmpty else {
-                    throw AppError.missingAPIKey
+                guard let accessCode = KeychainStore.loadAccessCode(), !accessCode.isEmpty else {
+                    throw AppError.missingAccessCode
                 }
                 var parts: [String] = []
                 var detectedLanguage: String?
+                var formatToken: String?
+                let segmentDuration = min(26, max(0.25, duration / Double(segments.count)))
                 for segment in segments {
                     let result = try await client.transcribe(
                         audioURL: segment,
-                        apiKey: apiKey,
+                        accessCode: accessCode,
                         language: language,
-                        mode: mode
+                        mode: mode,
+                        durationSeconds: segmentDuration
                     )
                     let cleaned = result.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !cleaned.isEmpty { parts.append(cleaned) }
                     detectedLanguage = detectedLanguage ?? result.languageCode
+                    formatToken = result.formatToken ?? formatToken
+                    remainingSeconds = result.remainingSeconds ?? remainingSeconds
                 }
                 let rawText = parts.joined(separator: " ")
                 guard !rawText.isEmpty else { throw AppError.emptyTranscript }
                 let processed = dictionary.process(rawText)
                 let preparedText: String
-                if shouldPolish && !processed.expandedShortcut {
+                if shouldPolish, !processed.expandedShortcut, let formatToken {
                     statusMessage = "Polishing for \(capturedDestination?.applicationName ?? "this app")…"
-                    preparedText = (try? await client.polish(
+                    do {
+                        preparedText = try await client.polish(
                             processed.text,
-                            apiKey: apiKey,
+                            accessCode: accessCode,
+                            formatToken: formatToken,
                             mode: mode,
                             style: writingStyle,
                             applicationName: capturedDestination?.applicationName,
                             vocabulary: dictionary.promptSummary
-                        )) ?? processed.text
+                        )
+                    } catch {
+                        if mode == .translit, SarvamClient.containsNativeIndicScript(processed.text) { throw error }
+                        preparedText = processed.text
+                    }
                 } else {
                     preparedText = processed.text
                 }
@@ -253,11 +291,13 @@ final class AppState: ObservableObject {
                 let text: String
                 if mode == .translit,
                    !processed.expandedShortcut,
-                   SarvamClient.containsNativeIndicScript(preparedText) {
+                   SarvamClient.containsNativeIndicScript(preparedText),
+                   let formatToken {
                     statusMessage = "Converting to English letters…"
                     text = try await client.romanize(
                         preparedText,
-                        apiKey: apiKey,
+                        accessCode: accessCode,
+                        formatToken: formatToken,
                         vocabulary: dictionary.promptSummary
                     )
                 } else {
@@ -301,6 +341,12 @@ final class AppState: ObservableObject {
             Task { @MainActor in
                 guard let self, let startedAt = self.startedAt else { return }
                 self.elapsed = Date().timeIntervalSince(startedAt)
+                if let remaining = self.remainingSeconds,
+                   remaining > 0,
+                   self.elapsed >= max(0.35, remaining - 0.2),
+                   self.phase.isRecording {
+                    self.finishRecording()
+                }
             }
         }
     }
@@ -317,15 +363,28 @@ final class AppState: ObservableObject {
             self.statusMessage = "Ready"
         }
     }
+
+    private func refreshUsage() {
+        guard let accessCode = KeychainStore.loadAccessCode(), !accessCode.isEmpty else { return }
+        Task {
+            do {
+                let usage = try await client.usage(accessCode: accessCode)
+                remainingSeconds = usage.remainingSeconds
+                if usage.remainingSeconds <= 0 { statusMessage = "Beta allowance used" }
+            } catch {
+                statusMessage = error.localizedDescription
+            }
+        }
+    }
 }
 
 enum AppError: LocalizedError {
-    case missingAPIKey
+    case missingAccessCode
     case emptyTranscript
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey: "Add your Sarvam API key in Settings."
+        case .missingAccessCode: "Add your beta access code in Settings."
         case .emptyTranscript: "No speech was detected."
         }
     }

@@ -3,10 +3,11 @@ import Security
 
 enum KeychainStore {
     private static let service = "com.nandanadileep.tictic"
-    private static let account = "sarvam-api-key"
+    private static let account = "beta-access-code"
 
-    static func saveAPIKey(_ key: String) throws {
-        let value = Data(key.trimmingCharacters(in: .whitespacesAndNewlines).utf8)
+    static func saveAccessCode(_ code: String) throws {
+        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let value = Data(normalized.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -19,7 +20,7 @@ enum KeychainStore {
         guard status == errSecSuccess else { throw KeychainError(status: status) }
     }
 
-    static func loadAPIKey() -> String? {
+    static func loadAccessCode() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -33,7 +34,7 @@ enum KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 
-    static func removeAPIKey() {
+    static func removeAccessCode() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
