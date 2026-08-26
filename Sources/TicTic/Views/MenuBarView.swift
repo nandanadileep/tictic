@@ -20,7 +20,7 @@ struct MenuBarView: View {
                 }
                 Spacer()
                 Circle()
-                    .fill(state.hasAccessCode ? .green : .orange)
+                    .fill((state.remainingSeconds ?? 300) > 0 ? .green : .orange)
                     .frame(width: 7, height: 7)
             }
             .padding(14)

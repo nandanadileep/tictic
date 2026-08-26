@@ -56,6 +56,10 @@ export function inviteHash(code) {
   return createHash('sha256').update(normalizeInviteCode(code)).digest('hex')
 }
 
+export function isInstallationID(code) {
+  return /^TIC-INSTALL-[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/.test(normalizeInviteCode(code))
+}
+
 export function usageKey(code) {
   return `tictic:beta:usage:${inviteHash(code)}`
 }
@@ -72,6 +76,7 @@ export function durationToMilliseconds(seconds) {
 }
 
 export async function getUsage(code) {
+  await ensureInstallationUsage(code)
   const used = await redisCommand(['GET', usageKey(code)])
   if (used === null) return null
   const usedMs = Number(used)
@@ -79,6 +84,7 @@ export async function getUsage(code) {
 }
 
 export async function reserveUsage(code, requestedMs) {
+  await ensureInstallationUsage(code)
   const result = await redisCommand(['EVAL', RESERVE_SCRIPT, '1', usageKey(code), String(requestedMs), String(BETA_LIMIT_MS)])
   const status = Number(result?.[0])
   const usedMs = Number(result?.[1] ?? 0)
@@ -87,21 +93,14 @@ export async function reserveUsage(code, requestedMs) {
   return { status: 'ok', ...usageSnapshot(usedMs), reservedMs: requestedMs }
 }
 
-export async function refundUsage(code, requestedMs) {
-  await redisCommand(['EVAL', REFUND_SCRIPT, '1', usageKey(code), String(requestedMs)])
+async function ensureInstallationUsage(code) {
+  if (isInstallationID(code)) {
+    await redisCommand(['SET', usageKey(code), '0', 'NX'])
+  }
 }
 
-export async function createInvite(label = '') {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const code = generateInviteCode()
-    const key = usageKey(code)
-    const created = await redisCommand(['SET', key, '0', 'NX'])
-    if (created === 'OK') {
-      if (label) await redisCommand(['SET', `${key}:label`, label.slice(0, 100)])
-      return code
-    }
-  }
-  throw new Error('Could not generate a unique invite code.')
+export async function refundUsage(code, requestedMs) {
+  await redisCommand(['EVAL', REFUND_SCRIPT, '1', usageKey(code), String(requestedMs)])
 }
 
 export async function issueFormatToken(code) {
@@ -124,12 +123,4 @@ export function usageSnapshot(usedMs) {
     remaining_seconds: (BETA_LIMIT_MS - safeUsed) / 1000,
     limit_seconds: BETA_LIMIT_MS / 1000
   }
-}
-
-function generateInviteCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const bytes = randomBytes(12)
-  let value = ''
-  for (const byte of bytes) value += alphabet[byte % alphabet.length]
-  return `TIC-${value.slice(0, 4)}-${value.slice(4, 8)}-${value.slice(8, 12)}`
 }

@@ -4,21 +4,21 @@ struct SarvamClient {
     var session: URLSession = .shared
     var baseURL = URL(string: "https://tictic-api.vercel.app/api/")!
 
-    func usage(accessCode: String) async throws -> BetaUsage {
-        let data = try await post(path: "usage", payload: UsageRequest(inviteCode: accessCode))
+    func usage(installationID: String) async throws -> BetaUsage {
+        let data = try await post(path: "usage", payload: UsageRequest(installationID: installationID))
         return try decode(BetaUsage.self, from: data)
     }
 
     func transcribe(
         audioURL: URL,
-        accessCode: String,
+        installationID: String,
         language: IndicLanguage,
         mode: TranscriptionMode,
         durationSeconds: TimeInterval
     ) async throws -> SarvamTranscript {
         let audioData = try Data(contentsOf: audioURL)
         let payload = TranscriptionRequest(
-            inviteCode: accessCode,
+            installationID: installationID,
             audioBase64: audioData.base64EncodedString(),
             filename: audioURL.lastPathComponent,
             mimeType: Self.mimeType(for: audioURL),
@@ -32,7 +32,7 @@ struct SarvamClient {
 
     func polish(
         _ text: String,
-        accessCode: String,
+        installationID: String,
         formatToken: String,
         mode: TranscriptionMode,
         style: WritingStyle,
@@ -41,7 +41,7 @@ struct SarvamClient {
     ) async throws -> String {
         try await format(
             text,
-            accessCode: accessCode,
+            installationID: installationID,
             formatToken: formatToken,
             mode: mode,
             style: style,
@@ -53,13 +53,13 @@ struct SarvamClient {
 
     func romanize(
         _ text: String,
-        accessCode: String,
+        installationID: String,
         formatToken: String,
         vocabulary: String
     ) async throws -> String {
         try await format(
             text,
-            accessCode: accessCode,
+            installationID: installationID,
             formatToken: formatToken,
             mode: .translit,
             style: .clean,
@@ -87,7 +87,7 @@ struct SarvamClient {
 
     private func format(
         _ text: String,
-        accessCode: String,
+        installationID: String,
         formatToken: String,
         mode: TranscriptionMode,
         style: WritingStyle,
@@ -96,7 +96,7 @@ struct SarvamClient {
         operation: String
     ) async throws -> String {
         let payload = FormatRequest(
-            inviteCode: accessCode,
+            installationID: installationID,
             formatToken: formatToken,
             text: text,
             mode: mode.rawValue,
@@ -147,12 +147,12 @@ struct SarvamClient {
 }
 
 private struct UsageRequest: Encodable {
-    let inviteCode: String
-    enum CodingKeys: String, CodingKey { case inviteCode = "invite_code" }
+    let installationID: String
+    enum CodingKeys: String, CodingKey { case installationID = "installation_id" }
 }
 
 private struct TranscriptionRequest: Encodable {
-    let inviteCode: String
+    let installationID: String
     let audioBase64: String
     let filename: String
     let mimeType: String
@@ -161,7 +161,7 @@ private struct TranscriptionRequest: Encodable {
     let durationSeconds: Double
 
     enum CodingKeys: String, CodingKey {
-        case inviteCode = "invite_code"
+        case installationID = "installation_id"
         case audioBase64 = "audio_base64"
         case filename
         case mimeType = "mime_type"
@@ -172,7 +172,7 @@ private struct TranscriptionRequest: Encodable {
 }
 
 private struct FormatRequest: Encodable {
-    let inviteCode: String
+    let installationID: String
     let formatToken: String
     let text: String
     let mode: String
@@ -182,7 +182,7 @@ private struct FormatRequest: Encodable {
     let operation: String
 
     enum CodingKeys: String, CodingKey {
-        case inviteCode = "invite_code"
+        case installationID = "installation_id"
         case formatToken = "format_token"
         case text, mode, style, vocabulary, operation
         case applicationName = "application_name"
@@ -201,7 +201,7 @@ enum SarvamError: LocalizedError {
         case .invalidResponse: "TicTic returned an invalid response."
         case let .http(status, message):
             switch status {
-            case 401: message ?? "This beta access code is not valid."
+            case 401: message ?? "This TicTic installation could not be verified."
             case 402: message ?? "Your five-minute beta allowance has been used."
             case 413: message ?? "The audio segment is too large."
             case 429: message ?? "TicTic is busy. Please try again shortly."

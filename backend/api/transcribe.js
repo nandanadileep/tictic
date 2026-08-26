@@ -8,10 +8,10 @@ const MAX_AUDIO_BYTES = 1_000_000
 export default async function handler(request, response) {
   if (request.method !== 'POST') return methodNotAllowed(response)
   let reservation
-  let inviteCode
+  let installationID
   try {
     const body = await readJson(request)
-    inviteCode = requireString(body.invite_code, 'invite_code', 64)
+    installationID = requireString(body.installation_id ?? body.invite_code, 'installation_id', 64)
     const language = requireString(body.language_code, 'language_code', 16)
     const mode = requireString(body.mode, 'mode', 20)
     if (!ALLOWED_MODES.has(mode)) return sendJson(response, 400, { error: 'invalid_mode' })
@@ -22,9 +22,9 @@ export default async function handler(request, response) {
       return sendJson(response, 413, { error: 'invalid_audio', message: 'Audio segment is too large.' })
     }
     const requestedMs = durationToMilliseconds(body.duration_seconds)
-    reservation = await reserveUsage(inviteCode, requestedMs)
+    reservation = await reserveUsage(installationID, requestedMs)
     if (reservation.status === 'invalid_code') {
-      return sendJson(response, 401, { error: 'invalid_invite', message: 'This beta access code is not valid.' })
+      return sendJson(response, 401, { error: 'invalid_installation', message: 'This TicTic installation could not be verified.' })
     }
     if (reservation.status === 'quota_exceeded') {
       return sendJson(response, 402, { error: 'beta_limit_reached', message: 'Your five-minute beta allowance has been used.', ...reservation })
@@ -37,7 +37,7 @@ export default async function handler(request, response) {
       language,
       mode
     })
-    const formatToken = await issueFormatToken(inviteCode)
+    const formatToken = await issueFormatToken(installationID)
     return sendJson(response, 200, {
       ...transcript,
       format_token: formatToken,
@@ -45,8 +45,8 @@ export default async function handler(request, response) {
       limit_seconds: reservation.limit_seconds
     })
   } catch (error) {
-    if (reservation?.status === 'ok' && inviteCode) {
-      await refundUsage(inviteCode, reservation.reservedMs).catch(console.error)
+    if (reservation?.status === 'ok' && installationID) {
+      await refundUsage(installationID, reservation.reservedMs).catch(console.error)
     }
     const result = publicError(error)
     return sendJson(response, result.status, result.body)
