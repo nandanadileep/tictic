@@ -9,9 +9,9 @@ export default async function handler(request, response) {
   if (request.method !== 'POST') return methodNotAllowed(response)
   try {
     const body = await readJson(request)
-    const inviteCode = requireString(body.invite_code, 'invite_code', 64)
+    const installationID = requireString(body.installation_id ?? body.invite_code, 'installation_id', 64)
     const formatToken = requireString(body.format_token, 'format_token', 128)
-    const allowed = await consumeFormatToken(inviteCode, formatToken)
+    const allowed = await consumeFormatToken(installationID, formatToken)
     if (!allowed) return sendJson(response, 401, { error: 'invalid_format_token', message: 'This formatting request has expired.' })
 
     const mode = requireString(body.mode, 'mode', 20)

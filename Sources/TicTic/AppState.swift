@@ -9,10 +9,7 @@ final class AppState: ObservableObject {
     @Published var audioLevel: Double = 0
     @Published var elapsed: TimeInterval = 0
     @Published var statusMessage = "Ready"
-    @Published var accessCodeDraft = ""
-    @Published private(set) var hasAccessCode = false
     @Published private(set) var remainingSeconds: Double?
-    @Published private(set) var isCheckingAccessCode = false
     @Published private(set) var microphoneGranted = false
     @Published private(set) var accessibilityGranted = false
 
@@ -22,6 +19,7 @@ final class AppState: ObservableObject {
 
     private let recorder = AudioRecorder()
     private let client = SarvamClient()
+    private let installationID: String?
     private var hotkeyMonitor: GlobalHotkeyMonitor
     private var overlayController: OverlayController?
     private var destination: TextDestination?
@@ -37,8 +35,8 @@ final class AppState: ObservableObject {
         self.preferences = resolvedPreferences
         self.history = history ?? HistoryStore()
         self.dictionary = dictionary ?? PersonalDictionary()
+        installationID = try? KeychainStore.loadOrCreateInstallationID()
         hotkeyMonitor = GlobalHotkeyMonitor(hotkey: resolvedPreferences.hotkey)
-        hasAccessCode = !(KeychainStore.loadAccessCode() ?? "").isEmpty
 
         resolvedPreferences.$hotkey
             .dropFirst()
@@ -57,7 +55,7 @@ final class AppState: ObservableObject {
         if !hotkeyMonitor.start() {
             statusMessage = "Accessibility permission needed"
         }
-        if hasAccessCode { refreshUsage() }
+        refreshUsage()
     }
 
     func refreshPermissions() {
@@ -80,37 +78,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    func saveAccessCode() {
-        let candidate = accessCodeDraft.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !candidate.isEmpty else { return }
-        isCheckingAccessCode = true
-        statusMessage = "Checking beta access code…"
-        Task {
-            defer { isCheckingAccessCode = false }
-            do {
-                let usage = try await client.usage(accessCode: candidate)
-                try KeychainStore.saveAccessCode(candidate)
-                accessCodeDraft = ""
-                hasAccessCode = true
-                remainingSeconds = usage.remainingSeconds
-                statusMessage = usage.remainingSeconds > 0 ? "Beta access ready" : "Beta allowance used"
-            } catch {
-                hasAccessCode = false
-                remainingSeconds = nil
-                statusMessage = error.localizedDescription
-            }
-        }
-    }
-
-    func removeAccessCode() {
-        KeychainStore.removeAccessCode()
-        hasAccessCode = false
-        remainingSeconds = nil
-        statusMessage = "Beta access code removed"
-    }
-
     var remainingLabel: String {
-        guard let remainingSeconds else { return hasAccessCode ? "Checking…" : "5 min beta" }
+        guard let remainingSeconds else { return "5:00 left" }
         let seconds = max(0, Int(remainingSeconds.rounded(.down)))
         return "\(seconds / 60):\(String(format: "%02d", seconds % 60)) left"
     }
@@ -170,12 +139,6 @@ final class AppState: ObservableObject {
 
     private func beginRecording(locked: Bool) {
         guard !phase.isRecording else { return }
-        guard hasAccessCode else {
-            statusMessage = "Add your beta access code in Settings"
-            phase = .failure(statusMessage)
-            resetAfterDelay()
-            return
-        }
         if let remainingSeconds, remainingSeconds < 0.5 {
             statusMessage = "Your five-minute beta allowance has been used"
             phase = .failure(statusMessage)
@@ -243,8 +206,8 @@ final class AppState: ObservableObject {
         Task {
             defer { recorder.cleanupFiles() }
             do {
-                guard let accessCode = KeychainStore.loadAccessCode(), !accessCode.isEmpty else {
-                    throw AppError.missingAccessCode
+                guard let installationID else {
+                    throw AppError.missingInstallationID
                 }
                 var parts: [String] = []
                 var detectedLanguage: String?
@@ -253,7 +216,7 @@ final class AppState: ObservableObject {
                 for segment in segments {
                     let result = try await client.transcribe(
                         audioURL: segment,
-                        accessCode: accessCode,
+                        installationID: installationID,
                         language: language,
                         mode: mode,
                         durationSeconds: segmentDuration
@@ -273,7 +236,7 @@ final class AppState: ObservableObject {
                     do {
                         preparedText = try await client.polish(
                             processed.text,
-                            accessCode: accessCode,
+                            installationID: installationID,
                             formatToken: formatToken,
                             mode: mode,
                             style: writingStyle,
@@ -296,7 +259,7 @@ final class AppState: ObservableObject {
                     statusMessage = "Converting to English letters…"
                     text = try await client.romanize(
                         preparedText,
-                        accessCode: accessCode,
+                        installationID: installationID,
                         formatToken: formatToken,
                         vocabulary: dictionary.promptSummary
                     )
@@ -365,10 +328,13 @@ final class AppState: ObservableObject {
     }
 
     private func refreshUsage() {
-        guard let accessCode = KeychainStore.loadAccessCode(), !accessCode.isEmpty else { return }
+        guard let installationID else {
+            statusMessage = AppError.missingInstallationID.localizedDescription
+            return
+        }
         Task {
             do {
-                let usage = try await client.usage(accessCode: accessCode)
+                let usage = try await client.usage(installationID: installationID)
                 remainingSeconds = usage.remainingSeconds
                 if usage.remainingSeconds <= 0 { statusMessage = "Beta allowance used" }
             } catch {
@@ -379,12 +345,12 @@ final class AppState: ObservableObject {
 }
 
 enum AppError: LocalizedError {
-    case missingAccessCode
+    case missingInstallationID
     case emptyTranscript
 
     var errorDescription: String? {
         switch self {
-        case .missingAccessCode: "Add your beta access code in Settings."
+        case .missingInstallationID: "TicTic could not prepare this installation. Please relaunch the app."
         case .emptyTranscript: "No speech was detected."
         }
     }

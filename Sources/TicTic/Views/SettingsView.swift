@@ -43,8 +43,8 @@ struct SettingsView: View {
                 .listStyle(.sidebar)
 
                 HStack(spacing: 7) {
-                    Circle().fill(state.hasAccessCode ? .green : .orange).frame(width: 7, height: 7)
-                    Text(state.hasAccessCode ? state.remainingLabel : "Setup incomplete")
+                    Circle().fill((state.remainingSeconds ?? 300) > 0 ? .green : .orange).frame(width: 7, height: 7)
+                    Text(state.remainingLabel)
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(16)
@@ -139,31 +139,6 @@ private struct HomeSettingsView: View {
                 MetricCard(icon: "hourglass", value: state.remainingLabel, label: "Beta allowance")
             }
 
-            Card {
-                VStack(alignment: .leading, spacing: 14) {
-                    Label("Beta access", systemImage: "ticket.fill").font(.headline)
-                    if state.hasAccessCode {
-                        HStack {
-                            Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Access code connected")
-                                Text("\(state.remainingLabel) of your 5-minute beta")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("Replace") { state.removeAccessCode() }
-                        }
-                    } else {
-                        HStack {
-                            TextField("TIC-XXXX-XXXX-XXXX", text: $state.accessCodeDraft)
-                                .textFieldStyle(.roundedBorder)
-                            Button(state.isCheckingAccessCode ? "Checking…" : "Connect") { state.saveAccessCode() }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(state.accessCodeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || state.isCheckingAccessCode)
-                        }
-                    }
-                }
-            }
         }
     }
 }

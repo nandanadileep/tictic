@@ -3,11 +3,17 @@ import Security
 
 enum KeychainStore {
     private static let service = "com.nandanadileep.tictic"
-    private static let account = "beta-access-code"
+    private static let account = "beta-installation-id"
 
-    static func saveAccessCode(_ code: String) throws {
-        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let value = Data(normalized.utf8)
+    static func loadOrCreateInstallationID() throws -> String {
+        if let existing = loadInstallationID(), !existing.isEmpty { return existing }
+        let identifier = "TIC-INSTALL-\(UUID().uuidString.uppercased())"
+        try saveInstallationID(identifier)
+        return identifier
+    }
+
+    private static func saveInstallationID(_ identifier: String) throws {
+        let value = Data(identifier.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -20,7 +26,7 @@ enum KeychainStore {
         guard status == errSecSuccess else { throw KeychainError(status: status) }
     }
 
-    static func loadAccessCode() -> String? {
+    private static func loadInstallationID() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -32,15 +38,6 @@ enum KeychainStore {
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data else { return nil }
         return String(data: data, encoding: .utf8)
-    }
-
-    static func removeAccessCode() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        SecItemDelete(query as CFDictionary)
     }
 }
 
